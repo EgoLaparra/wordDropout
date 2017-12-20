@@ -39,9 +39,9 @@ class DAN(nn.Module):
         self.drops = np.zeros(len_voc)
         self.embs = nn.Embedding(len_voc, emb_size)
         if dmethod == 1:
-            self.dropout = nn.Dropout(p=1.-drop)
+            self.dropout = nn.Dropout(p=drop)
         elif dmethod == 2:
-            self.dropout = nn.AlphaDropout(p=1.-drop)
+            self.dropout = nn.AlphaDropout(p=drop)
         elif dmethod == 3:
             self.dropout = embd.Bernoulli(p=drop)
             #self.dropout = embd.BernoulliReplace(p=drop)
@@ -73,7 +73,7 @@ class DAN(nn.Module):
         #     if  input.data.numpy()[0][i] in keeplist:
         #         idx.append(i)
         if self.training:
-            if dmethod == 1 or dmethod == 2 or dmethod == 3:
+            if dmethod == 3:
                 outemb, keep = self.dropout(outemb)
             elif dmethod == 4:
                 outemb = self.dropout(outemb, drop_criterion)
@@ -101,9 +101,15 @@ class DAN(nn.Module):
         outrelus = list()
         for i in range(0, len(self.linear)):
             if len(outrelus) == 0:
+                if dmethod == 1 or dmethod == 2:
+                    outmean = self.dropout(outmean)
                 outrelus.append(self.relu[i](self.linear[i](outmean)))
             else:
+                if dmethod == 1 or dmethod == 2:
+                    outrelus[i-1] = self.dropout(outrelus[i-1])
                 outrelus.append(self.relu[i](self.linear[i](outrelus[i-1])))
+        if dmethod == 1 or dmethod == 2:
+            outrelus[-1] = self.dropout(outrelus[-1])
         out = self.top(self.toplinear(outrelus[-1]))
         
         if lrp:
