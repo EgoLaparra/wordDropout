@@ -130,8 +130,8 @@ class Relevance():
             #relevance = [self.p + 0.1 if r > np.mean(relevance) else self.p - 0.1 for r in relevance]
             #relevance = self.p + relevance
             #relevance = self.p + (relevance - np.mean(relevance)   
-        #else:
-        #    relevance += self.p
+        else:
+            relevance += self.p
 
         keep = np.reshape(np.argwhere(rand.rds.rand(input.size(0)) > relevance), (-1))
         if len(keep) > 0:

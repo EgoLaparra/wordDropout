@@ -18,7 +18,7 @@ import emb_dropouts as embd
 import rand
 
 # keeplist = pkl.load(open('keep.pkl', 'rb'))
-vocab = pkl.load(open('aux_experiments/vocab.pkl', 'rb'))
+# vocab = pkl.load(open('aux_experiments/vocab.pkl', 'rb'))
 def word(sent):
     out = list()
     for q in sent:
@@ -36,13 +36,14 @@ class DAN(nn.Module):
         deep = args['deep']
         drop = args['drop']
         dmethod = args['drop_method']
+        dnet = args['net_drop']
         self.drops = np.zeros(len_voc)
         self.embs = nn.Embedding(len_voc, emb_size)
-        if dmethod == 1:
-            self.dropout = nn.Dropout(p=drop)
-        elif dmethod == 2:
-            self.dropout = nn.AlphaDropout(p=drop)
-        elif dmethod == 3:
+        if dnet == 1:
+            self.netdropout = nn.Dropout(p=drop)
+        elif dnet == 2:
+            self.netdropout = nn.AlphaDropout(p=drop)
+        if dmethod == 3:
             self.dropout = embd.Bernoulli(p=drop)
             #self.dropout = embd.BernoulliReplace(p=drop)
             #self.dropout = embd.BernoulliNoise(p=drop)
@@ -65,7 +66,7 @@ class DAN(nn.Module):
         self.toplinear = nn.Linear(hidden_size, labels)
         self.top = nn.LogSoftmax()
 
-    def forward(self, input, dmethod=None, drop_criterion=None, lrp=False):
+    def forward(self, input, dmethod=None, dnet=None, drop_criterion=None, lrp=False):
         # print(word(input.data.numpy()[0]))
         outemb = self.embs(input)
         # idx = list()
@@ -101,15 +102,15 @@ class DAN(nn.Module):
         outrelus = list()
         for i in range(0, len(self.linear)):
             if len(outrelus) == 0:
-                if dmethod == 1 or dmethod == 2:
-                    outmean = self.dropout(outmean)
+                if dnet == 1 or dnet == 2:
+                    outmean = self.netdropout(outmean)
                 outrelus.append(self.relu[i](self.linear[i](outmean)))
             else:
-                if dmethod == 1 or dmethod == 2:
-                    outrelus[i-1] = self.dropout(outrelus[i-1])
+                if dnet == 1 or dnet == 2:
+                    outrelus[i-1] = self.netdropout(outrelus[i-1])
                 outrelus.append(self.relu[i](self.linear[i](outrelus[i-1])))
-        if dmethod == 1 or dmethod == 2:
-            outrelus[-1] = self.dropout(outrelus[-1])
+        if dnet == 1 or dnet == 2:
+            outrelus[-1] = self.netdropout(outrelus[-1])
         out = self.top(self.toplinear(outrelus[-1]))
         
         if lrp:
@@ -166,7 +167,7 @@ def train(net, data, drop_criterion, args):
                 else:
                     sent_drop_criterion =  drop_criterion[sent]
                 sent = Variable(torch.LongTensor([sent]))
-                pred = net(sent, dmethod=args['drop_method'], drop_criterion=sent_drop_criterion)
+                pred = net(sent, dmethod=args['drop_method'], dnet=args['net_drop'], drop_criterion=sent_drop_criterion)
 
                 if bpred.dim() == 0:
                     bpred = pred
@@ -338,6 +339,7 @@ if __name__ == '__main__':
     parser.add_argument('-data_name', help='dataset name', default='sts')
     parser.add_argument('-fold', help='fold number', type=int, default=0)
     parser.add_argument('-drop_method', help='dropout method', type=int, default=0)
+    parser.add_argument('-net_drop', help='network dropout method', type=int, default=0)
     parser.add_argument('-runs', help='number of runs', type=int, default=1)
     parser.add_argument('-phrase', help='access phrase annotations', type=int, default=0)
     
@@ -351,7 +353,7 @@ if __name__ == '__main__':
     if args['relevances'] is not None:
         args['relevances'] = os.path.join(args['experiment'], args['relevances'])
     
-    print 'dropout method %d with %d runs' % (args['drop_method'], args['runs'])
+    print 'dropout method %d; net dropout method %d; %d runs' % (args['drop_method'], args['net_drop'], args['runs'])
     
     # load data
     if args['data_name'] == 'imdb':
