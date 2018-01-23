@@ -70,7 +70,7 @@ class DAN(nn.Module):
         self.toplinear = nn.Linear(hidden_size, labels)
         self.top = nn.LogSoftmax()
 
-    def forward(self, input, dmethod=None, dnet=None, drop_criterion=None, lrp=False):
+    def forward(self, input, dmethod=None, dnet=None, drop_criterion=None, lrp=None):
         # print(word(input.data.numpy()[0]))
         outemb = self.embs(input)
         # idx = list()
@@ -116,7 +116,7 @@ class DAN(nn.Module):
         if dnet == 1 or dnet == 2:
             outrelus[-1] = self.netdropout(outrelus[-1])
         out = self.top(self.toplinear(outrelus[-1]))
-
+        
         if lrp is not None:
             tinny = 1e-16
             R = out[0]
