@@ -70,11 +70,7 @@ class DAN(nn.Module):
         self.toplinear = nn.Linear(hidden_size, labels)
         self.top = nn.LogSoftmax()
 
-<<<<<<< HEAD
-    def forward(self, input, dmethod=None, drop_criterion=None, lrp=None):
-=======
     def forward(self, input, dmethod=None, dnet=None, drop_criterion=None, lrp=False):
->>>>>>> 3c99dee51a1166fb3ab1c4951112f40cec4b435d
         # print(word(input.data.numpy()[0]))
         outemb = self.embs(input)
         # idx = list()
