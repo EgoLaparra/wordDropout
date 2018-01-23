@@ -484,22 +484,30 @@ if __name__ == '__main__':
             else:
                 emb_relevance = pkl.load(open(args['relevances'], 'rb'))
             keep = np.argsort(emb_relevance)[150:]
-            #orig_We = orig_We[:,keep]
-            orig_We = net.embs.weight.data.numpy()[:,keep]
-            args['d'] = np.shape(orig_We)[1]
-            linear0 = net.linear[0].weight.data.numpy()[:,keep]
-            state_dict = net.state_dict()
+            reduced_We = orig_We[:,keep]
+            args['d'] = np.shape(reduced_We)[1]
             net = DAN(len_voc, args)
-            state_dict["embs.weight"] = torch.from_numpy(np.array(orig_We))
-            state_dict["linear.0.weight"] = torch.from_numpy(np.array(linear0))
-            net.load_state_dict(state_dict)
-            torch.save(net.state_dict(), args['output'])
-            #net.embs.weight.data.copy_(torch.from_numpy(np.array(orig_We)))
-            #net.linear[0].weight.data.copy_(torch.from_numpy(np.array(linear0)))
-            #net.train()
-            #net.dropout = embd.Relevance(p=args['drop']) #####
-            #args['drop_method'] = 6 ####
-            #train(net, data_train, freq_voc, args)
+            net.embs.weight.data.copy_(torch.from_numpy(np.array(reduced_We)))
+            net.train()
+            train(net, data_train, freq_voc, args)
+            args['d'] = 300            
+            # keep = np.argsort(emb_relevance)[150:]
+            # #orig_We = orig_We[:,keep]
+            # orig_We = net.embs.weight.data.numpy()[:,keep]
+            # args['d'] = np.shape(orig_We)[1]
+            # linear0 = net.linear[0].weight.data.numpy()[:,keep]
+            # state_dict = net.state_dict()
+            # net = DAN(len_voc, args)
+            # state_dict["embs.weight"] = torch.from_numpy(np.array(orig_We))
+            # state_dict["linear.0.weight"] = torch.from_numpy(np.array(linear0))
+            # net.load_state_dict(state_dict)
+            # torch.save(net.state_dict(), args['output'])
+            # #net.embs.weight.data.copy_(torch.from_numpy(np.array(orig_We)))
+            # #net.linear[0].weight.data.copy_(torch.from_numpy(np.array(linear0)))
+            # #net.train()
+            # #net.dropout = embd.Relevance(p=args['drop']) #####
+            # #args['drop_method'] = 6 ####
+            # #train(net, data_train, freq_voc, args)
         else:
             train(net, data_train, freq_voc, args)
 
