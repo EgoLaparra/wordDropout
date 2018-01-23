@@ -21,6 +21,21 @@ class Bernoulli():
         return input, drop
     # return input, keep
 
+class BernoulliDim():
+    def __init__(self, p=0.3):
+        #super(Bernoulli, self).__init__()
+        self.p = p
+        
+    def __call__(self, input):
+        input_size = input.size()
+        input = input[0]
+        drop = np.reshape(np.argwhere(rand.rds.rand(input_size[2]) < self.p), (-1))
+        if len(drop) > 0:
+            input.data[:,torch.from_numpy(drop)] = torch.zeros(len(drop), input_size[1])
+        input = input.view(input_size[0],-1,input_size[2])
+        return input, drop
+    # return input, keep
+
     
 class BernoulliReplace():
     def __init__(self, p=0.3):
@@ -130,8 +145,8 @@ class Relevance():
             #relevance = [self.p + 0.1 if r > np.mean(relevance) else self.p - 0.1 for r in relevance]
             #relevance = self.p + relevance
             #relevance = self.p + (relevance - np.mean(relevance)   
-        #else:
-        #    relevance += self.p
+        else:
+            relevance += self.p
 
         keep = np.reshape(np.argwhere(rand.rds.rand(input.size(0)) > relevance), (-1))
         if len(keep) > 0:

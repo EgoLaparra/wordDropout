@@ -18,7 +18,7 @@ import emb_dropouts as embd
 import rand
 
 # keeplist = pkl.load(open('keep.pkl', 'rb'))
-vocab = pkl.load(open('aux_experiments/vocab.pkl', 'rb'))
+# vocab = pkl.load(open('aux_experiments/vocab.pkl', 'rb'))
 def word(sent):
     out = list()
     for q in sent:
@@ -36,13 +36,14 @@ class DAN(nn.Module):
         deep = args['deep']
         drop = args['drop']
         dmethod = args['drop_method']
+        dnet = args['net_drop']
         self.drops = np.zeros(len_voc)
         self.embs = nn.Embedding(len_voc, emb_size)
-        if dmethod == 1:
-            self.dropout = nn.Dropout(p=drop)
-        elif dmethod == 2:
-            self.dropout = nn.AlphaDropout(p=drop)
-        elif dmethod == 3:
+        if dnet == 1:
+            self.netdropout = nn.Dropout(p=drop)
+        elif dnet == 2:
+            self.netdropout = nn.AlphaDropout(p=drop)
+        if dmethod == 3:
             self.dropout = embd.Bernoulli(p=drop)
             #self.dropout = embd.BernoulliReplace(p=drop)
             #self.dropout = embd.BernoulliNoise(p=drop)
@@ -54,6 +55,10 @@ class DAN(nn.Module):
             self.dropout = embd.Relevance(p=drop)
         elif dmethod == 7:
             self.dropout = embd.FreqRelevance(p=drop)
+        elif dmethod == 8:
+            self.dropout = embd.BernoulliDim(p=drop)
+        elif dmethod == 9:
+            self.dropout = embd.Bernoulli(p=drop)
         self.linear = nn.ModuleList()
         self.relu = nn.ModuleList()
         for i in range(0, deep):
@@ -65,7 +70,11 @@ class DAN(nn.Module):
         self.toplinear = nn.Linear(hidden_size, labels)
         self.top = nn.LogSoftmax()
 
-    def forward(self, input, dmethod=None, drop_criterion=None, lrp=False):
+<<<<<<< HEAD
+    def forward(self, input, dmethod=None, drop_criterion=None, lrp=None):
+=======
+    def forward(self, input, dmethod=None, dnet=None, drop_criterion=None, lrp=False):
+>>>>>>> 3c99dee51a1166fb3ab1c4951112f40cec4b435d
         # print(word(input.data.numpy()[0]))
         outemb = self.embs(input)
         # idx = list()
@@ -73,7 +82,7 @@ class DAN(nn.Module):
         #     if  input.data.numpy()[0][i] in keeplist:
         #         idx.append(i)
         if self.training:
-            if dmethod == 3:
+            if dmethod == 3 or dmethod == 8 or dmethod == 9:
                 outemb, keep = self.dropout(outemb)
             elif dmethod == 4:
                 outemb = self.dropout(outemb, drop_criterion)
@@ -101,18 +110,18 @@ class DAN(nn.Module):
         outrelus = list()
         for i in range(0, len(self.linear)):
             if len(outrelus) == 0:
-                if dmethod == 1 or dmethod == 2:
-                    outmean = self.dropout(outmean)
+                if dnet == 1 or dnet == 2:
+                    outmean = self.netdropout(outmean)
                 outrelus.append(self.relu[i](self.linear[i](outmean)))
             else:
-                if dmethod == 1 or dmethod == 2:
-                    outrelus[i-1] = self.dropout(outrelus[i-1])
+                if dnet == 1 or dnet == 2:
+                    outrelus[i-1] = self.netdropout(outrelus[i-1])
                 outrelus.append(self.relu[i](self.linear[i](outrelus[i-1])))
-        if dmethod == 1 or dmethod == 2:
-            outrelus[-1] = self.dropout(outrelus[-1])
+        if dnet == 1 or dnet == 2:
+            outrelus[-1] = self.netdropout(outrelus[-1])
         out = self.top(self.toplinear(outrelus[-1]))
-        
-        if lrp:
+
+        if lrp is not None:
             tinny = 1e-16
             R = out[0]
             for i in range(len(outrelus)-1, -1, -1):
@@ -121,7 +130,10 @@ class DAN(nn.Module):
                 else:
                     R = torch.mul(torch.div(torch.mul(outrelus[i][0], self.linear[i+1].weight).transpose(0,1), torch.add(outrelus[i+1][0], tinny)), R).sum(1)
             R = torch.mul(torch.div(torch.mul(outmean[0], self.linear[0].weight).transpose(0,1), torch.add(outrelus[0][0], tinny)), R).sum(1)
-            R = (outemb[0] * R / outemb[0].sum(0)).sum(1)
+            if lrp == 0:
+                R = (outemb[0] * R / outemb[0].sum(0)).sum(1)
+            elif lrp == 1:
+                R = (outemb[0] * R / outemb[0].sum(0)).sum(0)
             return R
         else:
             return out
@@ -166,7 +178,7 @@ def train(net, data, drop_criterion, args):
                 else:
                     sent_drop_criterion =  drop_criterion[sent]
                 sent = Variable(torch.LongTensor([sent]))
-                pred = net(sent, dmethod=args['drop_method'], drop_criterion=sent_drop_criterion)
+                pred = net(sent, dmethod=args['drop_method'], dnet=args['net_drop'], drop_criterion=sent_drop_criterion)
 
                 if bpred.dim() == 0:
                     bpred = pred
@@ -222,34 +234,40 @@ def train(net, data, drop_criterion, args):
 
         
 
-def lrp(net, data):
+def lrp(net, data, dim=0):
 
-    over_lrp = np.zeros(net.embs.weight.size(0))
-    over_total = np.zeros(net.embs.weight.size(0)) + 1e-16
-    
+    dim = 1
+    over_lrp = np.zeros(net.embs.weight.size(dim))
+    over_total = np.zeros(net.embs.weight.size(dim)) + 1e-16
+
     for sent, label in data:
 
         if len(sent) == 0:
             continue
 
         sent = Variable(torch.LongTensor([sent]))
-        pred = net(sent,lrp=True)
+        pred = net(sent,lrp=dim)
 
-        for e,w in enumerate(sent.view(-1).data):
-            over_lrp[w] += abs(pred.data[e])
-            over_total[w] += 1
-
+        if dim == 0:
+            for e,w in enumerate(sent.view(-1).data):
+                over_lrp[w] += abs(pred.data[e])
+                over_total[w] += 1
+        elif dim == 1:
+            over_lrp += abs(pred.data.numpy())
+            over_total += 1
+            
     over_lrp = over_lrp / over_total
 
     #for o in range(0, len(over_lrp)):
     #    over_lrp[o] = percentileofscore(over_lrp, over_lrp[o]) / 100
     return over_lrp
 
-    
+
 def sga(net, data):
 
     over_sga = np.zeros(net.embs.weight.size(0))
-        
+    over_total = np.zeros(net.embs.weight.size(0)) + 1e-16
+    
     for sent, label in data:
 
         if len(sent) == 0:
@@ -265,8 +283,12 @@ def sga(net, data):
         io_sga = (net.embs.weight.grad ** 2).sum(1).data.numpy()
         over_sga += io_sga     
 
-    for o in range(0, len(over_sga)):
-        over_sga[o] = percentileofscore(over_sga, over_sga[o]) / 100
+        for w in sent.view(-1).data:
+            over_total[w] += 1
+
+    over_lrp = over_lrp / over_total
+    #for o in range(0, len(over_sga)):
+    #    over_sga[o] = percentileofscore(over_sga, over_sga[o]) / 100
     
     return over_sga
 
@@ -338,6 +360,7 @@ if __name__ == '__main__':
     parser.add_argument('-data_name', help='dataset name', default='sts')
     parser.add_argument('-fold', help='fold number', type=int, default=0)
     parser.add_argument('-drop_method', help='dropout method', type=int, default=0)
+    parser.add_argument('-net_drop', help='network dropout method', type=int, default=0)
     parser.add_argument('-runs', help='number of runs', type=int, default=1)
     parser.add_argument('-phrase', help='access phrase annotations', type=int, default=0)
     
@@ -351,7 +374,7 @@ if __name__ == '__main__':
     if args['relevances'] is not None:
         args['relevances'] = os.path.join(args['experiment'], args['relevances'])
     
-    print 'dropout method %d with %d runs' % (args['drop_method'], args['runs'])
+    print 'dropout method %d; net dropout method %d; %d runs' % (args['drop_method'], args['net_drop'], args['runs'])
     
     # load data
     if args['data_name'] == 'imdb':
@@ -415,7 +438,7 @@ if __name__ == '__main__':
 
         net = DAN(len_voc, args)
         orig_We = cPickle.load(open(args['We'], 'rb'))
-        orig_We = np.transpose(orig_We)
+        orig_We = np.transpose(orig_We[:d])
         net.embs.weight.data.copy_(torch.from_numpy(np.array(orig_We)))
         
         net.train()
@@ -430,10 +453,11 @@ if __name__ == '__main__':
                 if args['drop_method'] == 5:
                    emb_relevance = sga(net, data_train)
                 else:
-                   emb_relevance = lrp(net, data_train)
-                f = open(args['relevances'], 'wb')
-                pkl.dump(emb_relevance, f)
-                f.close()
+                   emb_relevance = lrp(net, data_train, dim=0)
+                if args['relevances'] is not None:
+                    f = open(args['relevances'], 'wb')
+                    pkl.dump(emb_relevance, f)
+                    f.close()
             else:
                 emb_relevance = pkl.load(open(args['relevances'], 'rb'))
             net = DAN(len_voc, args)
@@ -445,6 +469,41 @@ if __name__ == '__main__':
                 train(net, data_train, [freq_voc, emb_relevance], args)
             else:
                 train(net, data_train, emb_relevance, args)
+        if args['drop_method'] == 9:
+            emb_relevance = np.zeros(len_voc)
+            if args['relevances'] == None or not os.path.isfile(args['relevances']):
+                #net.dropout = embd.Bernoulli(p=args['drop']) #####
+                #args['drop_method'] = 3 ####
+                train(net, data_train, emb_relevance, args)
+                print('calculating relevance...')
+                net.eval()
+                if args['drop_method'] == 5:
+                   emb_relevance = sga(net, data_train)
+                else:
+                   emb_relevance = lrp(net, data_train, dim=0)
+                if args['relevances'] is not None:
+                    f = open(args['relevances'], 'wb')
+                    pkl.dump(emb_relevance, f)
+                    f.close()
+            else:
+                emb_relevance = pkl.load(open(args['relevances'], 'rb'))
+            keep = np.argsort(emb_relevance)[150:]
+            #orig_We = orig_We[:,keep]
+            orig_We = net.embs.weight.data.numpy()[:,keep]
+            args['d'] = np.shape(orig_We)[1]
+            linear0 = net.linear[0].weight.data.numpy()[:,keep]
+            state_dict = net.state_dict()
+            net = DAN(len_voc, args)
+            state_dict["embs.weight"] = torch.from_numpy(np.array(orig_We))
+            state_dict["linear.0.weight"] = torch.from_numpy(np.array(linear0))
+            net.load_state_dict(state_dict)
+            torch.save(net.state_dict(), args['output'])
+            #net.embs.weight.data.copy_(torch.from_numpy(np.array(orig_We)))
+            #net.linear[0].weight.data.copy_(torch.from_numpy(np.array(linear0)))
+            #net.train()
+            #net.dropout = embd.Relevance(p=args['drop']) #####
+            #args['drop_method'] = 6 ####
+            #train(net, data_train, freq_voc, args)
         else:
             train(net, data_train, freq_voc, args)
 
