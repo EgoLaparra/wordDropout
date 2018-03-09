@@ -17,7 +17,8 @@ class Bernoulli():
         drop = np.reshape(np.argwhere(rand.rds.rand(input.size(0)) < self.p), (-1))
         if len(drop) > 0:
             input.data[torch.from_numpy(drop)] = torch.zeros(len(drop), input_size[2])
-        input = input.view(input_size[0],-1,input_size[2])
+        input.data /= (1 - self.p)
+        input = input.view(input_size[0], -1, input_size[2])
         return input, drop
     # return input, keep
 
